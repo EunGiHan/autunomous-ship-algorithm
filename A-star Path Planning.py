@@ -15,38 +15,53 @@ class Map:
         self.ENU_edge_points = np.zeros_like(self.GPS_edge_points)
         self.limit_lines = []
 
+        self.GPS_to_ENU()
+
+
     def GPS_to_ENU(self):
         for i in range(len(self.GPS_edge_points)):
             self.ENU_edge_points[i][0], self.ENU_edge_points[i][1] , self.ENU_edge_points[i][2] = \
                 pm.geodetic2enu(self.GPS_edge_points[i][0], self.GPS_edge_points[i][1], self.GPS_edge_points[i][2], self.GPS_edge_points[0][0], self.GPS_edge_points[0][1], self.GPS_edge_points[0][2])
         self.ENU_edge_points = np.delete(self.ENU_edge_points, 2, axis=1)
 
-    def make_limit_lines(self):
-        for i in range(len(self.ENU_edge_points)):
-            p1 = self.ENU_edge_points[i]
-            p2 = self.ENU_edge_points[(i + 1) % len(self.ENU_edge_points)]
-            a = float((p2[1] - p1[1]) / (p2[0] - p1[0]))
-            b = float(p2[1] - p2[0] * ((p2[1] - p1[1]) / (p2[0] - p1[0])))
-            self.limit_lines.append([a, b])
+    # def make_limit_lines(self):
+    #     for i in range(len(self.ENU_edge_points)):
+    #         p1 = self.ENU_edge_points[i]
+    #         p2 = self.ENU_edge_points[(i + 1) % len(self.ENU_edge_points)]
+    #         a = float((p2[1] - p1[1]) / (p2[0] - p1[0])) #zero division 대비
+    #         b = float(p2[1] - p2[0] * ((p2[1] - p1[1]) / (p2[0] - p1[0])))
+    #         self.limit_lines.append([a, b])
 
     def check_line_in(self, point):
-        # 특정 점이 밖으로 나갔는지 체크. 직선의 방정식 넘어갔나 넘어가지 않았나 판단
-        # true 이면 안에 있는 것
-        return True
+        # 특정 점이 밖으로 나갔는지 체크. true 이면 안에 있는 것
+        # 오른쪽 벡터와 선이 아예 일치할 경우 등 예외처리 꼭 보기!
+        crossed = 0
+        for i in range(len(self.ENU_edge_points)):
+            j = (i + 1) % len(self.ENU_edge_points)
+            if (self.ENU_edge_points[i][1] > point[1]) != (self.ENU_edge_points[j][1] > point[1]):
+                intersection = float((self.ENU_edge_points[j][0]- self.ENU_edge_points[i][0])*(point[1]-self.ENU_edge_points[i][1])/(self.ENU_edge_points[j][1]-self.ENU_edge_points[i][1])+self.ENU_edge_points[i][0])
+                if point[0] < intersection:
+                    crossed = crossed + 1
+        return (crossed % 2) > 0
 
 
 class Obstacles:
     def __init__(self):
-        self.circle_obstacles = []
+        self.circle_obstacles = [[1,1], [8, 2], [9, 0], [10, 0]] #[x, y, r]
         self.wall_obstacles = []
-        self.limit_line = None
+
+        self.safety_range = 1.4
+
+    def calc_distance(self, p1, p2):
+        return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
 
     def check_safety(self, point):
-        #안전하면 true 리턴
+        for c in self.circle_obstacles: #가장 가까운 장애물과만 T/F 계산하게? heading 고려해야 하네...
+            if calc_dist(point, c[0:2]) < (c[2] + self.safety_range): #갈 지점과 장애물 사이의 거리가 (반지름+안전거리) 보다 작으면 위험하니 False
+                return False
+        return True          #안전하면 true 리턴
 
-        #2-1. Circle 장애물 : (갈 지점과 장애물 중심점 사이 거리) > (장애물 반지름 + 안전거리) 일 때만 필터링
         #2-2. Wall 장애물 : min(갈 지점과 start점 사이 거리, 갈 지점과 end 점 사이 거리, 벽 중심까지 거리) > (안전거리) 일 때만 필터링
-        return True
 
 class A_star:
     def __init__(self):
@@ -54,10 +69,11 @@ class A_star:
         self.trajectory = [] #예측 경로
         self.path_length = 0.0
         self.ideal_heading = 0.0
+        self.ideal_heading_vector = [0, 0] #시작 헤딩에 따라 조절 필요
         self.final_goal = [18, 21]
         self.predict_step = 5
-        self.obstacles = Obstacles() #잘 작동하는지 확인
-        self.limit_lines = Map()
+        self.obstacles = Obstacles() #장애물 아직 0개일 때 처리!
+        self.mapping = Map()
 
 
 
@@ -73,7 +89,7 @@ class A_star:
         points = [p for p in points if self.possible_point(p)] #갈 수 있는 점만 남겨둠
 
         for p in points:
-            g, delta_heading = self.calc_g(p)
+            g, delta_heading = self.calc_g(p) #후진할 경우 거리 달라지니까 어쨌든 출발점부터 거리는 구해야 하나?
             h = calc_dist(p, self.final_goal)
             f = g + h
             p.extend([f, delta_heading]) #ideal_에 델타 더해준 값을 append 해야 할까.. // point는 [x, y, f, delta_heading]쌍이 됨
@@ -85,28 +101,30 @@ class A_star:
                 best_step = p
 
         self.trajectory.append(best_step)
+        self.ideal_heading += best_step[3]
 
     def possible_point(self, point):
-        if self.limit_lines.check_line_in(point) and self.obstacles.check_safety(point):
+        if self.mapping.check_line_in(point) and self.obstacles.check_safety(point):
             return True
         else:
             return False
 
     def calc_g(self, point):
-        theta = calc_theta(self.ideal_heading, self.current_position, point)
-        if -30 <= theta <= 30:
-            return [1, theta]
-            #작은 값
-        elif -60 < theta < 60:
-            return [1, theta]
-            #중간 값
+        delta_theta = calc_theta(self.ideal_heading_vector, self.current_position, point) #파라미터 수정!, 이름 통일!
+        if -30 <= delta_theta <= 30:
+            return [1, delta_theta] #작은 값
+        elif -60 < delta_theta < 60:
+            return [2, delta_theta] #중간 값
         else:
-            return [1, theta]
-            #큰 값
+            return [3, delta_theta] #큰 값
 
 
-def calc_theta(heading, boat_position, point):
-    return 5
+def calc_theta(heading_vector, boat_position, point):
+    vec_a = np.array([heading_vector[0] - boat_position[0], heading_vector[1] - boat_position[1]]) #각각을 길이로 나눠 정규화?
+    vec_b = np.array([point[0] - boat_position[0], point[1] - boat_position[1]])
+    return math.asin(np.dot(vec_a, vec_b)) #dot 잘 들어가나 확인!
+
+
 
 def calc_dist(p1, p2):
     return float(math.sqrt(math.pow(p1[0]-p2[0], 2) + math.pow(p1[1]-p2[1], 2)))
