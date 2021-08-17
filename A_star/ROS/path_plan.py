@@ -44,9 +44,12 @@ class Boat:
         rospy.Subscriber("/bearing", HeadingAngle, self.cur_bearing_callback)
 
     def cur_pos_callback(self, msg):
+        # self.x = msg.x
+        # self.y = msg.y
+        # self.cur_pos = np.array([self.x, self.y])
         self.cur_pos = np.array([msg.x, msg.y])
     
-    def cur_bearing_callback(self, msg):
+    def cur_bearing_callback(self, msg): #need to reconsider!!!!!, 0&180 degree???
         self.bearing = msg.bearing #degree
         theta = math.radians(msg.bearing)
         self.cur_heading = np.array([math.sin(theta), math.cos(theta)])
@@ -93,7 +96,7 @@ class PathPlanner:
         self.g_value_rotate_gain_60 = path_plan_config["g_value_rotate_gain_60"]
         self.g_value_rotate_gain_90 = path_plan_config["g_value_rotate_gain_90"]
         self.h_value_gain = path_plan_config["h_value_gain"]
-        self.past_path = self.start_pos
+        self.past_path = np.array([self.start_pos])
         self.trajectory = np.zeros((1, 2))
 
         ## real moving
@@ -210,7 +213,7 @@ class PathPlanner:
                                      self.edge_points[i][0])
                 if point[0] < intersection:
                     crossed = crossed + 1
-        return (crossed % 2) == 0 #line out = True
+        return (crossed % 2) == 0
 
     def is_obstacle_in(self, point):
         if len(self.ob_list) == 0:
@@ -219,7 +222,7 @@ class PathPlanner:
         for i in range(len(self.ob_list)):
             distance_to_ob = math.sqrt((point[0] - self.ob_list[i][0]) ** 2 + (point[1] - self.ob_list[i][1]) ** 2)
             if distance_to_ob < self.obstacle_search_range:
-                return True #obstacle in = True
+                return True
 
         return False
 
@@ -261,7 +264,7 @@ class PathPlanner:
         print("| {0:<16} | {1:61} |".format("ob_list", ""))
         for x, y in self.ob_list:
             print("| {0:16} | {1:>8} , {2:>8} {3:41} |".format("", str(round(x, 2)), str(round(y, 2)), ""))
-     
+    
     def servo_pid_controller(self):
         dx = self.trajectory[0][0] - self.cur_pos[0]
         dy = self.trajectory[0][1] - self.cur_pos[1]
@@ -329,6 +332,7 @@ class PathPlanner:
     def print_info(self):
         print("+" + "-"*82 + "+")
         print("+" + "-"*82 + "+")
+        print(self.start_pos)
         print("| {0:<16} | {1:>8} , {2:>8} || {3:<16} | {4:>19} |".format(\
             "cur_pos", str(round(self.cur_pos[0], 2)), str(round(self.cur_pos[1], 2)),\
             "bearing", str(round(self.bearing))))
@@ -338,174 +342,44 @@ class PathPlanner:
             "trajectory[0]", str(round(self.cur_pos[0], 2)), str(round(self.cur_pos[1], 2)),\
             "heading", str(round(self.cur_heading[0], 2)), str(round(self.cur_heading[1], 2))))
 
-class Controller:
-    def __init__(self):
-        rospy.init_node('Path_Plan', anonymous=False)
-        self.pp = PathPlanner()
-
-    def board_show(self):
-        cur_pos_str = "( " + str(round(self.pp.cur_pos[0], 2)) + " , " + str(
-            round(self.pp.cur_pos[1], 2)) + " )"
-        window.ui.cur_pos_lineEdit.setText(cur_pos_str)
-
-        cur_heading_str = "( " + str(round(self.pp.cur_heading[0], 2)) + " , " + str(
-            round(self.pp.cur_heading[1], 2)) + " )"
-        window.ui.cur_heading_lineEdit.setText(cur_heading_str)
-
-        next_goal_str = "( " + str(round(self.pp.next_goal[0], 2)) + " , " + str(
-            round(self.pp.next_goal[1], 2)) + " )"
-        window.ui.next_goal_lineEdit.setText(next_goal_str)
-
-    def run_to_goal(self):
-        rate = rospy.Rate(10)
-        hz = 1 # hz * 0.1 sec
-        time.sleep(3)
-        self.pp.start_pos = self.pp.boat.cur_pos
-        while not rospy.is_shutdown():
-            self.pp.cur_pos = self.pp.boat.cur_pos
-            self.pp.cur_heading = self.pp.boat.cur_heading
-            self.pp.bearing = self.pp.boat.bearing
-
-            self.board_show()
-
-            hz -= 1
-            self.pp.print_info()
-
-            if self.pp.is_finished():
-                print("|{:-<82}+".format(" main loop / Arrived Next Goal"))
-                if len(self.pp.end_points) > 1:
-                    print("|{:-<82}+".format(" main loop / Arrived Next Goal / Set Next Goal"))
-                    self.pp.end_points = np.delete(self.pp.end_points, 0, axis=0)
-                    self.pp.next_goal = self.pp.end_points[0]
-                elif len(self.pp.end_points) == 1:
-                    print("|{:-<82}+".format(" main loop / Arrived Next Goal / Set Next Goal"))
-                    self.pp.next_goal = self.pp.end_points[0]
-                    self.pp.end_points = self.np.delete(self.pp.end_points, 0, axis=0)
-                else:
-                    print("|{:-<82}+".format(" main loop / Arrived Next Goal / Arrived Final Goal"))
-                    self.pp.thruster_pub.publish(1500)
-                    self.pp.servo_pub.publish(93)
-                    window.timer.stop()
-                    break
-            else:
-                print("|{:-<82}+".format(" main loop / Not Arrived"))
-                self.pp.obstacle_update()
-                if hz < 1:
-                    self.pp.make_trajectory()
-                    hz = 20
-                self.pp.control_publisher()
-                self.pp.save_past_path()
-                window.draw(self.pp.edge_points, self.pp.cur_pos, self.pp.trajectory,
-                            self.pp.start_pos, self.pp.past_path, self.pp.ob_list,
-                            self.pp.end_points, self.pp.arrival_range)
-
-            rate.sleep()
-        # window.timer.stop()
-        rospy.spin()
-
-class SimulationWindow(QDialog):
-    controller = Controller()
-    timer = QTimer()
-    def __init__(self, parent=None):
-        super(SimulationWindow, self).__init__(parent)
-        self.ui = UI_Simulator()
-        self.ui.set_UI(self)
-        # self.controller = Controller()
-        # self.timer = QTimer()
-        self.timer.start(50)
-        self.timer.timeout.connect(self.controller.run_to_goal)
-
-        # ##Simulator Initial Values
-        self.ui.ob_search_range_lineEdit.setText(str(self.controller.pp.obstacle_search_range))
-        self.ui.predict_step_lineEdit.setText(str(self.controller.pp.predict_step))
-        self.ui.predict_step_size_lineEdit.setText(str(self.controller.pp.predict_step_size))
-        self.ui.g_value_rotate_gain_45_lineEdit.setText(str(self.controller.pp.g_value_rotate_gain_0))
-        self.ui.g_value_rotate_gain_90_lineEdit.setText(str(self.controller.pp.g_value_rotate_gain_30))
-        self.ui.g_value_rotate_gain_180_lineEdit.setText(str(self.controller.pp.g_value_rotate_gain_60))
-        self.ui.h_value_gain_lineEdit.setText(str(self.controller.pp.h_value_gain))
-        self.ui.arrival_range_lineEdit.setText(str(self.controller.pp.arrival_range))
-
-    def draw(self, edge_points, cur_pos, trajectory, start_pos, past_path, obstacles, end_points, arrival_range):
-        scale = 0.09
-        c = 1 / scale
-
-        self.scene = GraphicsScene()
-        self.ui.graphicsView.setScene(self.scene)
-
-        pen_edges = QPen(Qt.black, 2)
-        for i in range(len(edge_points)):
-            j = (i + 1) % len(edge_points)
-            self.scene.addLine(QLineF(c * edge_points[i][0], -c * edge_points[i][1],
-                                      c * edge_points[j][0], -c * edge_points[j][1]), pen_edges)
-
-        pen_grid = QPen(Qt.black, 0.5, Qt.DotLine)
-        x_edge_end = [edge_points[0][0], edge_points[0][0]]  # [min, max]
-        y_edge_end = [edge_points[0][1], edge_points[0][1]]
-        for i in range(len(edge_points)):
-            if edge_points[i][0] < x_edge_end[0]:
-                x_edge_end[0] = edge_points[i][0]
-            if edge_points[i][0] > x_edge_end[1]:  
-                x_edge_end[1] = edge_points[i][0]
-            if edge_points[i][1] < y_edge_end[0]:
-                y_edge_end[0] = edge_points[i][1]
-            if edge_points[i][1] > y_edge_end[1]:
-                y_edge_end[1] = edge_points[i][1]
-
-        x_grid_num = int((x_edge_end[1] - x_edge_end[0]) / 5)
-        y_grid_num = int((y_edge_end[1] - y_edge_end[0]) / 5)
-        for i in range(x_grid_num + 1):
-            self.scene.addLine(QLineF(c * int(x_edge_end[0] + 5 * i), -c * y_edge_end[0],
-                                      c * int(x_edge_end[0] + 5 * i), -c * y_edge_end[1]), pen_grid)
-        for i in range(y_grid_num + 1):
-            self.scene.addLine(QLineF(c * x_edge_end[0], -c * int(y_edge_end[0] + 5 * i),
-                                      c * x_edge_end[1], -c * int(y_edge_end[0] + 5 * i)), pen_grid)
-
-        pen_pastPath = QPen(Qt.green, 1.5)
-        if len(past_path) > 1:
-            for i in range(len(past_path) - 1):
-                self.scene.addLine(QLineF(c * past_path[i][0], -c * past_path[i][1],
-                                          c * past_path[i + 1][0], -c * past_path[i + 1][1]), pen_pastPath)
-
-        pen_trajectory = QPen(Qt.red)
-        self.scene.addLine(QLineF(c * cur_pos[0], -c * cur_pos[1],
-                                      c * trajectory[0][0], -c * trajectory[0][1]), pen_trajectory)
-        for i in range(len(trajectory) - 1):
-            self.scene.addLine(QLineF(c * trajectory[i][0], -c * trajectory[i][1],
-                                      c * trajectory[i + 1][0], -c * trajectory[i + 1][1]), pen_trajectory)
-
-        pen_obstacle = QPen(Qt.black)
-        for i in range(len(obstacles)):
-            obstacle_diameter = c * 0.4
-            self.scene.addEllipse(c * obstacles[i][0] - obstacle_diameter / 2,
-                                  -c * obstacles[i][1] - obstacle_diameter / 2,
-                                  obstacle_diameter, obstacle_diameter, pen_obstacle, QBrush(Qt.black))
-
-        pen_boat = QPen(Qt.red)
-        diameter = c * 0.4
-        self.scene.addEllipse(c * cur_pos[0] - diameter / 2, -c * cur_pos[1] - diameter / 2,
-                              diameter, diameter, pen_boat, QBrush(Qt.red))
-
-        pen_start = QPen(Qt.green)
-        diameter = c * 0.4
-        self.scene.addEllipse(c * start_pos[0] - diameter / 2, -c * start_pos[1] - diameter / 2,
-                              diameter, diameter, pen_start, QBrush(Qt.green))
-
-        pen_arrival_range = QPen(Qt.blue, 0.8)
-        for i in range(len(end_points)):
-            diameter = c * arrival_range
-            self.scene.addEllipse(c * end_points[i][0] - diameter / 2, -c * end_points[i][1] - diameter / 2,
-                                  diameter, diameter, pen_arrival_range, QBrush(Qt.white))
-            pen_end = QPen(Qt.blue)
-            diameter = c * 0.4
-            self.scene.addEllipse(c * end_points[i][0] - diameter / 2, -c * end_points[i][1] - diameter / 2,
-                                  diameter, diameter, pen_end, QBrush(Qt.blue))
-
-class GraphicsScene(QGraphicsScene):
-    def __init__(self, parent=None):
-        QGraphicsScene.__init__(self, parent=None)
-
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    window = SimulationWindow()
-    window.show()
-    sys.exit(app.exec_())
+    rospy.init_node('Path_Plan', anonymous=False)
+    pp = PathPlanner()
+    rate = rospy.Rate(10)
+    hz = 1 # hz * 0.1 sec
+    time.sleep(5)
+    pp.start_pos = pp.boat.cur_pos
+    while not rospy.is_shutdown():
+        pp.cur_pos = pp.boat.cur_pos
+        pp.cur_heading = pp.boat.cur_heading
+        pp.bearing = pp.boat.bearing
+
+        hz -= 1
+        pp.print_info()
+
+        if pp.is_finished():
+            print("|{:-<82}+".format(" main loop / Arrived Next Goal"))
+            if len(pp.end_points) > 1:
+                print("|{:-<82}+".format(" main loop / Arrived Next Goal / Set Next Goal"))
+                pp.end_points = np.delete(pp.end_points, 0, axis=0)
+                pp.next_goal = pp.end_points[0]
+            elif len(pp.end_points) == 1:
+                print("|{:-<82}+".format(" main loop / Arrived Next Goal / Set Next Goal"))
+                pp.next_goal = pp.end_points[0]
+                pp.end_points = np.delete(pp.end_points, 0, axis=0)
+            else:
+                print("|{:-<82}+".format(" main loop / Arrived Next Goal / Arrived Final Goal"))
+                pp.thruster_pub.publish(1500)
+                pp.servo_pub.publish(93)
+                break
+        else:
+            print("|{:-<82}+".format(" main loop / Not Arrived"))
+            pp.obstacle_update()
+            if hz < 1:
+                pp.make_trajectory()
+                hz = 20
+            pp.control_publisher()
+
+        rate.sleep()
+
+    rospy.spin()

@@ -17,10 +17,6 @@ class UI_Simulator(object):
         # self.graphicsView.setGeometry(QtCore.QRect(0, 0, 600, 600))
         self.graphicsView.setObjectName("graphicsView") 
 
-        ### QLabel : Settings Value
-        self.settings_label = QtWidgets.QLabel(A_star_Simulator)
-        self.settings_label.setObjectName("settings_label")
-
         ### QLabel : Obstacle Search Range
         self.ob_search_range_label = QtWidgets.QLabel(A_star_Simulator)
         self.ob_search_range_label.setObjectName("ob_search_range_label")
@@ -85,10 +81,6 @@ class UI_Simulator(object):
         self.arrival_range_lineEdit = QtWidgets.QLineEdit(A_star_Simulator)
         self.arrival_range_lineEdit.setObjectName("arrival_range_lineEdit")
 
-        ### QLabel : Board
-        self.board_label = QtWidgets.QLabel(A_star_Simulator)
-        self.board_label.setObjectName("board_label")
-
         ### QLabel : Current Position Label
         self.cur_pos_label = QtWidgets.QLabel(A_star_Simulator)
         self.cur_pos_label.setObjectName("cur_pos_label")
@@ -122,8 +114,6 @@ class UI_Simulator(object):
         settings_groupBox = QtWidgets.QGroupBox('Settings') 
         settings_grid = QtWidgets.QGridLayout()
 
-        settings_grid.addWidget(self.settings_label, 0, 0, 2, 4)
-
         settings_grid.addWidget(self.ob_search_range_label, 1, 0, 1, 2)
         settings_grid.addWidget(self.ob_search_range_lineEdit, 1, 2, 1, 2)
 
@@ -154,8 +144,6 @@ class UI_Simulator(object):
         board_groupBox = QtWidgets.QGroupBox('Board') 
         board_grid = QtWidgets.QGridLayout()
 
-        board_grid.addWidget(self.board_label, 0, 0, 2, 4)
-
         board_grid.addWidget(self.cur_pos_label, 1, 0, 1, 2)
         board_grid.addWidget(self.cur_pos_lineEdit, 1, 2, 1, 2)
 
@@ -180,7 +168,6 @@ class UI_Simulator(object):
         _translate = QtCore.QCoreApplication.translate
         A_star_Simulator.setWindowTitle(_translate("A_star_Simulator", "A star Simulator"))
 
-        self.settings_label.setText(_translate("A_star_Simulator", "Settings"))
         self.ob_search_range_label.setText(_translate("A_star_Simulator", "Obstacle Search Range"))
         self.predict_step_label.setText(_translate("A_star_Simulator", "Predict Step"))
         self.predict_step_size_label.setText(_translate("A_star_Simulator", "Predict Step Size"))
@@ -189,7 +176,7 @@ class UI_Simulator(object):
         self.g_value_rotate_gain_180_label.setText(_translate("A_star_Simulator", "  180 Rotate Gain"))
         self.h_value_gain_label.setText(_translate("A_star_Simulator", "h: Goal Cost Gain"))
         self.arrival_range_label.setText(_translate("A_star_Simulator", "Arrival Check Range"))
-        self.board_label.setText(_translate("A_star_Simulator", "Board"))
+        
         self.cur_pos_label.setText(_translate("A_star_Simulator", "Current Position"))
         self.cur_heading_label.setText(_translate("A_star_Simulator", "Current Heading"))
         self.next_goal_label.setText(_translate("A_star_Simulator", "Next Goal"))
