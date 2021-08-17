@@ -11,13 +11,6 @@ from std_msgs.msg import String, UInt16, Float32
 from geometry_msgs.msg import Point
 from tricat_211.msg import FilteredObstacles, ObstaclePoint, Control, HeadingAngle
 
-from PyQt5.QtWidgets import QApplication, QDialog, QGraphicsScene
-from PyQt5.QtGui import QPen, QBrush, QCloseEvent
-from PyQt5.Qt import QTimer
-from PyQt5.QtCore import Qt, QLineF
-from PyQt5.QtTest import QTest
-
-from path_plan_simulation_window import UI_Simulator
 
 class Obstacle:
     def __init__(self):
@@ -44,12 +37,9 @@ class Boat:
         rospy.Subscriber("/bearing", HeadingAngle, self.cur_bearing_callback)
 
     def cur_pos_callback(self, msg):
-        # self.x = msg.x
-        # self.y = msg.y
-        # self.cur_pos = np.array([self.x, self.y])
         self.cur_pos = np.array([msg.x, msg.y])
     
-    def cur_bearing_callback(self, msg): #need to reconsider!!!!!, 0&180 degree???
+    def cur_bearing_callback(self, msg):
         self.bearing = msg.bearing #degree
         theta = math.radians(msg.bearing)
         self.cur_heading = np.array([math.sin(theta), math.cos(theta)])
@@ -96,7 +86,7 @@ class PathPlanner:
         self.g_value_rotate_gain_60 = path_plan_config["g_value_rotate_gain_60"]
         self.g_value_rotate_gain_90 = path_plan_config["g_value_rotate_gain_90"]
         self.h_value_gain = path_plan_config["h_value_gain"]
-        self.past_path = np.array([self.start_pos])
+        self.past_path = np.array([self.start_pos])  #ckeck and compare with path_paln_simulation.py
         self.trajectory = np.zeros((1, 2))
 
         ## real moving
@@ -161,21 +151,19 @@ class PathPlanner:
             distance_to_cur = (p[0] - self.cur_pos[0]) ** 2 + (p[1] - self.cur_pos[1]) ** 2
 
             # g
-            # vec = p - search_center[0] #2dim
-            vec = p - search_center  #1dim
+            vec = p - search_center
             vec = vec / math.sqrt((vec[0] ** 2 + vec[1] ** 2))
             sin_value = round(predict_heading[0] * vec[1] - predict_heading[1] * vec[0], 5)
             rotate_angle = abs(math.degrees(math.asin(sin_value)))  # degree
 
-            # distance_to_search = (p[0] - search_center[0][0]) ** 2 + (p[1] - search_center[0][1]) ** 2 #2dim
             distance_to_search = (p[0] - search_center[0]) ** 2 + (p[1] - search_center[1]) ** 2
-            if 0<= rotate_angle < 30:
+            if 0 <= rotate_angle < 30:
                 rotate_cost = distance_to_search * self.g_value_rotate_gain_0
-            elif 30<= rotate_angle <= 60:
+            elif 30 <= rotate_angle < 60:
                 rotate_cost = distance_to_search * self.g_value_rotate_gain_30
-            elif 60<= rotate_angle <= 90:
+            elif 60 <= rotate_angle < 90:
                 rotate_cost = distance_to_search * self.g_value_rotate_gain_60
-            elif 90<= rotate_angle <= 180:
+            elif 90 < rotate_angle <= 180:
                 rotate_cost = distance_to_search * self.g_value_rotate_gain_90
 
             # g
@@ -213,7 +201,7 @@ class PathPlanner:
                                      self.edge_points[i][0])
                 if point[0] < intersection:
                     crossed = crossed + 1
-        return (crossed % 2) == 0
+        return (crossed % 2) == 0 #line out = True
 
     def is_obstacle_in(self, point):
         if len(self.ob_list) == 0:
@@ -222,7 +210,7 @@ class PathPlanner:
         for i in range(len(self.ob_list)):
             distance_to_ob = math.sqrt((point[0] - self.ob_list[i][0]) ** 2 + (point[1] - self.ob_list[i][1]) ** 2)
             if distance_to_ob < self.obstacle_search_range:
-                return True
+                return True #obstacle in = True
 
         return False
 

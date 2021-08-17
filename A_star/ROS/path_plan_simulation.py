@@ -16,8 +16,8 @@ from PyQt5.QtGui import QPen, QBrush, QCloseEvent
 from PyQt5.Qt import QTimer
 from PyQt5.QtCore import Qt, QLineF
 from PyQt5.QtTest import QTest
-
 from path_plan_simulation_window import UI_Simulator
+
 
 class Obstacle:
     def __init__(self):
@@ -158,21 +158,19 @@ class PathPlanner:
             distance_to_cur = (p[0] - self.cur_pos[0]) ** 2 + (p[1] - self.cur_pos[1]) ** 2
 
             # g
-            # vec = p - search_center[0] #2dim
-            vec = p - search_center  #1dim
+            vec = p - search_center
             vec = vec / math.sqrt((vec[0] ** 2 + vec[1] ** 2))
             sin_value = round(predict_heading[0] * vec[1] - predict_heading[1] * vec[0], 5)
             rotate_angle = abs(math.degrees(math.asin(sin_value)))  # degree
 
-            # distance_to_search = (p[0] - search_center[0][0]) ** 2 + (p[1] - search_center[0][1]) ** 2 #2dim
             distance_to_search = (p[0] - search_center[0]) ** 2 + (p[1] - search_center[1]) ** 2
-            if 0<= rotate_angle < 30:
+            if 0 <= rotate_angle < 30:
                 rotate_cost = distance_to_search * self.g_value_rotate_gain_0
-            elif 30<= rotate_angle <= 60:
+            elif 30 <= rotate_angle < 60:
                 rotate_cost = distance_to_search * self.g_value_rotate_gain_30
-            elif 60<= rotate_angle <= 90:
+            elif 60 <= rotate_angle < 90:
                 rotate_cost = distance_to_search * self.g_value_rotate_gain_60
-            elif 90<= rotate_angle <= 180:
+            elif 90 < rotate_angle <= 180:
                 rotate_cost = distance_to_search * self.g_value_rotate_gain_90
 
             # g
@@ -316,6 +314,10 @@ class PathPlanner:
 
         print("| rotate_angle   {0:>8}  | error_angle   {1:>8}  | servo_control   {2:>11} |".format(str(round(self.angle)), str(round(error_angle)), str(round(servo_control))))
 
+        window.ui.rotate_angle_lineEdit.setText(str(round(self.angle)))
+        window.ui.error_angle_lineEdit.setText(str(round(error_angle)))
+        window.ui.servo_control_lineEdit.setText(str(round(servo_control)))
+
         return servo_control
 
     def control_publisher(self):
@@ -348,6 +350,8 @@ class Controller:
             round(self.pp.cur_pos[1], 2)) + " )"
         window.ui.cur_pos_lineEdit.setText(cur_pos_str)
 
+        window.ui.cur_bearing_lineEdit.setText(str(self.pp.bearing))
+
         cur_heading_str = "( " + str(round(self.pp.cur_heading[0], 2)) + " , " + str(
             round(self.pp.cur_heading[1], 2)) + " )"
         window.ui.cur_heading_lineEdit.setText(cur_heading_str)
@@ -355,6 +359,10 @@ class Controller:
         next_goal_str = "( " + str(round(self.pp.next_goal[0], 2)) + " , " + str(
             round(self.pp.next_goal[1], 2)) + " )"
         window.ui.next_goal_lineEdit.setText(next_goal_str)
+
+        trajectory_0_str = "( " + str(round(self.pp.trajectory[0][0], 2)) + " , " + str(
+            round(self.pp.trajectory[0][1], 2)) + " )"
+        window.ui.trajectory_0_lineEdit.setText(trajectory_0_str)
 
     def run_to_goal(self):
         rate = rospy.Rate(10)
@@ -400,7 +408,6 @@ class Controller:
                             self.pp.end_points, self.pp.arrival_range)
 
             rate.sleep()
-        # window.timer.stop()
         rospy.spin()
 
 class SimulationWindow(QDialog):
@@ -419,14 +426,16 @@ class SimulationWindow(QDialog):
         self.ui.ob_search_range_lineEdit.setText(str(self.controller.pp.obstacle_search_range))
         self.ui.predict_step_lineEdit.setText(str(self.controller.pp.predict_step))
         self.ui.predict_step_size_lineEdit.setText(str(self.controller.pp.predict_step_size))
-        self.ui.g_value_rotate_gain_45_lineEdit.setText(str(self.controller.pp.g_value_rotate_gain_0))
-        self.ui.g_value_rotate_gain_90_lineEdit.setText(str(self.controller.pp.g_value_rotate_gain_30))
-        self.ui.g_value_rotate_gain_180_lineEdit.setText(str(self.controller.pp.g_value_rotate_gain_60))
+        self.ui.g_value_rotate_gain_0_lineEdit.setText(str(self.controller.pp.g_value_rotate_gain_0))
+        self.ui.g_value_rotate_gain_30_lineEdit.setText(str(self.controller.pp.g_value_rotate_gain_30))
+        self.ui.g_value_rotate_gain_60_lineEdit.setText(str(self.controller.pp.g_value_rotate_gain_60))
+        self.ui.g_value_rotate_gain_90_lineEdit.setText(str(self.controller.pp.g_value_rotate_gain_90))
         self.ui.h_value_gain_lineEdit.setText(str(self.controller.pp.h_value_gain))
         self.ui.arrival_range_lineEdit.setText(str(self.controller.pp.arrival_range))
+        self.ui.kp_servo_lineEdit.setText(str(self.controller.pp.kp_servo))
 
     def draw(self, edge_points, cur_pos, trajectory, start_pos, past_path, obstacles, end_points, arrival_range):
-        scale = 0.09
+        scale = 0.05
         c = 1 / scale
 
         self.scene = GraphicsScene()
